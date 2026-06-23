@@ -6724,12 +6724,12 @@ function openAddClient(){
     </div>
   `);
 }
-function saveAddClient(){
+async function saveAddClient(){
   const nm=$('nc-nm').value.trim(),id=$('nc-id').value.trim();
   if(!nm||!id){showToast('⚠️ اسم ورقم العميل مطلوبان');return;}
   if(DB.clients.find(c=>c.id===id && c.company===CC)){showToast('⚠️ رقم العميل موجود في شركتك');return;}
   const coords=($('nc-coords')?.value||'').split(',');
-  DB.clients.push({
+  const newClient={
     id,name:nm,channel:$('nc-ch')?.value||'تجزئة',
     agent:$('nc-ag')?.value||'',company:CC,
     region:$('nc-rg')?.value||'',
@@ -6738,7 +6738,25 @@ function saveAddClient(){
     crNumber:$('nc-cr')?.value.trim()||'',taxNumber:$('nc-tax')?.value.trim()||'',
     phone:$('nc-phone')?.value.trim()||'',address:$('nc-addr')?.value.trim()||'',
     rating:'جديد',status:'نشط'
-  });
+  };
+  // حفظ في Supabase (لو مش super admin وعنده شركة)
+  if(window._sb && CC && CU && CU.role!=='super'){
+    try{
+      const {data,error}=await _sb.from('clients').insert({
+        display_id:id, name:nm, channel:newClient.channel,
+        agent_id:newClient.agent||null, company_id:CC, region:newClient.region||null,
+        ly_sales:newClient.ly, ty_sales:0, shelf_share:0, credit_limit:0,
+        last_order_days:0, lat:newClient.lat, lng:newClient.lng,
+        cr_number:newClient.crNumber||null, tax_number:newClient.taxNumber||null,
+        phone:newClient.phone||null, address:newClient.address||null,
+        rating:'جديد', status:'نشط'
+      }).select().single();
+      if(error){ console.warn('[clients] خطأ حفظ:',error.message); showToast('⚠️ خطأ في الحفظ: '+error.message); return; }
+      if(data?.id){ newClient._sbId=data.id; }  // نحتفظ بـ id بتاع Supabase
+      console.log('[clients] ✅ اتحفظ:',nm);
+    }catch(e){ console.warn('[clients] استثناء:',e); showToast('⚠️ خطأ في الاتصال'); return; }
+  }
+  DB.clients.push(newClient);
   closeMod();rebuildPage('clients');showToast(`✓ تمت إضافة ${nm}`);
 }
 function openClientMod(cid){
@@ -10526,8 +10544,8 @@ async function addRegion(){
   const v=$('new-reg')?.value.trim();if(!v){showToast('⚠️ ادخل اسم المنطقة');return;}
   if(coRegions().includes(v)){showToast('⚠️ المنطقة موجودة');return;}
   if(!DB.regions[CC])DB.regions[CC]=[];
-  // حفظ في Supabase أولاً (لو مش super admin وعنده شركة)
-  if(window._sb && CC && CU && CU.role!=='super'){
+  // حفظ في Supabase (طالما فيه شركة محددة CC — السوبر كمان يقدر يحفظ بحكم صلاحياته)
+  if(window._sb && CC){
     try{
       const {data,error}=await _sb.from('regions').insert({company_id:CC,name:v}).select().single();
       if(error){ console.warn('[regions] خطأ حفظ:',error.message); showToast('⚠️ خطأ في الحفظ: '+error.message); return; }
@@ -10555,8 +10573,8 @@ function editRegion(i){
 async function saveEditReg(i){
   const v=$('er-v')?.value.trim();if(!v)return;
   const old=DB.regions[CC][i];
-  // تحديث في Supabase
-  if(window._sb && CC && CU && CU.role!=='super' && DB._regionIds?.[CC]?.[old]){
+  // تحديث في Supabase (السوبر كمان يقدر بحكم صلاحياته)
+  if(window._sb && CC && DB._regionIds?.[CC]?.[old]){
     try{
       const {error}=await _sb.from('regions').update({name:v}).eq('id',DB._regionIds[CC][old]);
       if(error){ console.warn('[regions] خطأ تعديل:',error.message); showToast('⚠️ خطأ: '+error.message); return; }
@@ -10574,8 +10592,8 @@ async function delRegion(i){
   const r=regs[i];
   const inUse=coClients().some(c=>c.region===r)||coAgents().some(a=>a.region===r);
   if(inUse){showToast('⚠️ المنطقة مستخدمة — قم بإعادة تعيين العملاء/المناديب أولاً');return;}
-  // حذف من Supabase
-  if(window._sb && CC && CU && CU.role!=='super' && DB._regionIds?.[CC]?.[r]){
+  // حذف من Supabase (السوبر كمان يقدر بحكم صلاحياته)
+  if(window._sb && CC && DB._regionIds?.[CC]?.[r]){
     try{
       const {error}=await _sb.from('regions').delete().eq('id',DB._regionIds[CC][r]);
       if(error){ console.warn('[regions] خطأ حذف:',error.message); showToast('⚠️ خطأ: '+error.message); return; }
@@ -18055,9 +18073,12 @@ async function sbLoadAllCompanies(){
     if(error){ console.warn('[Data] خطأ في تحميل الشركات:', error); return; }
     if(!companies) return;
 
+    // ⚠️ مهم: نمسح كل البيانات التجريبية القديمة عشان مايحصلش تعارض
+    // (الشركات والمستخدمين التجريبيين من الـ seed) — نعتمد على Supabase بس
+    DB.companies = [];
+    DB.users = DB.users.filter(u=>u.role==='super'); // نسيب السوبر بس
+
     companies.forEach(c=>{
-      // لو الشركة دي موجودة بالفعل في DB.companies (مثلاً من تحميل سابق)، حدّثها بدل التكرار
-      const idx = DB.companies.findIndex(x=>x.id===c.id);
       const mapped = {
         id: c.id,
         name: c.name,
@@ -18078,8 +18099,7 @@ async function sbLoadAllCompanies(){
         _fromSupabase: true,
         _status: c.status
       };
-      if(idx>=0) Object.assign(DB.companies[idx], mapped);
-      else DB.companies.push(mapped);
+      DB.companies.push(mapped);
 
       // التأكد من وجود مدخلات أساسية لباقي الكود (مناطق/منتجات/إعدادات) عشان منكسرش الواجهة
       if(!DB.regions[c.id]) DB.regions[c.id]=[];
