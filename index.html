@@ -4800,17 +4800,14 @@ function doLogin(){
       .then(({data,error})=>{
         if(btn){btn.textContent=origText;btn.disabled=false;}
         if(error || !data?.user){
-          // فشل Supabase Auth — مش بنجرب المحلي عشان الباسورد ممكن يكون اتغير
-          // بس لو المستخدم مش إيميل (يعني admin محلي) نجرب المحلي
-          if(u.includes('@')){
-            // إيميل حقيقي — الخطأ من Supabase = باسورد غلط فعلاً
-            $('li-err').style.display='block';
-            return;
-          }
-          // username محلي — جرّب الـ DB المحلي
-          const user=DB.users.find(x=>x.username===u&&x.pass===p);
-          if(!user){$('li-err').style.display='block';return;}
-          _enterApp(user);
+          // فشل Supabase Auth
+          // النظام دلوقتي بيعتمد على Supabase بالكامل — مفيش دخول محلي
+          // (الحسابات التجريبية القديمة زي superadmin/admin مش مسموح بيها)
+          $('li-err').textContent = u.includes('@')
+            ? '⚠️ الإيميل أو كلمة المرور غير صحيحة'
+            : '⚠️ سجّل الدخول بالإيميل المسجّل (مثال: name@company.com)';
+          $('li-err').style.display='block';
+          return;
         } else {
           // نجح Supabase ✅
           const sbUser=data.user;
@@ -4877,16 +4874,16 @@ function doLogin(){
       })
       .catch(()=>{
         if(btn){btn.textContent=origText;btn.disabled=false;}
-        // Supabase error — fallback local
-        const user=DB.users.find(x=>x.username===u&&x.pass===p);
-        if(!user){$('li-err').style.display='block';return;}
-        _enterApp(user);
+        // خطأ في الاتصال بـ Supabase — لا نسمح بدخول محلي (أمان)
+        $('li-err').textContent = '⚠️ تعذّر الاتصال بالخادم. تأكد من الإنترنت وحاول تاني.';
+        $('li-err').style.display='block';
+        return;
       });
   } else {
-    // Supabase مش متاح — DB محلي مباشرة
-    const user=DB.users.find(x=>x.username===u&&x.pass===p);
-    if(!user){$('li-err').style.display='block';return;}
-    _enterApp(user);
+    // Supabase مش متاح — رسالة خطأ (مفيش دخول محلي)
+    $('li-err').textContent = '⚠️ الخادم غير متاح حالياً. حاول بعد قليل.';
+    $('li-err').style.display='block';
+    return;
   }
 }
 
@@ -18093,6 +18090,31 @@ async function sbLoadAllCompanies(){
       }
     });
     console.log('[Data] ✅ شركات حقيقية محمّلة من Supabase:', companies.length);
+
+    // جلب كل المستخدمين (profiles) الحقيقيين عشان نحسب عدد المدراء والمناديب الصح لكل شركة
+    const {data: allProfiles, error: pErr} = await window._sbCall(
+      _sb.from('profiles').select('*'), 8000
+    );
+    if(!pErr && allProfiles){
+      allProfiles.forEach(pr=>{
+        if(pr.role==='super') return; // السوبر أدمن مالوش شركة
+        if(!DB.users.find(u=>u.id===pr.id)){
+          DB.users.push({
+            id: pr.id,
+            company: pr.company_id,
+            username: pr.full_name || pr.id,
+            name: pr.full_name || '',
+            role: pr.role || 'agent',
+            region: pr.region || '',
+            target: pr.target || 0,
+            active: pr.active !== false,
+            avatar: (pr.full_name||'U')[0].toUpperCase(),
+            avC: 'avB'
+          });
+        }
+      });
+      console.log('[Data] ✅ كل المستخدمين محمّلين:', allProfiles.length);
+    }
   }catch(e){
     console.warn('[Data] خطأ غير متوقع في تحميل الشركات:', e);
   }
