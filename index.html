@@ -14159,14 +14159,28 @@ function openAddProduct(){
     </div>
   `);
 }
-function saveAddProduct(){
+async function saveAddProduct(){
   const nm=document.getElementById('np-nm')?.value.trim();
   if(!nm){showToast('⚠️ ادخل اسم المنتج');return;}
   const chs=['مطاعم وفنادق','هايبر ماركت','تجزئة','جملة','إعاشة','شركات','منازل وأفراد','مستشفيات'];
   const channelPrices={};
   chs.forEach((ch,i)=>{channelPrices[ch]=parseFloat(document.getElementById('np-ch-'+i)?.value)||0;});
   if(!DB.products[CC])DB.products[CC]=[];
-  DB.products[CC].push({id:'p'+Date.now(),name:nm,unit:document.getElementById('np-un')?.value.trim()||'وحدة',channelPrices,cost:parseFloat(document.getElementById('np-cost')?.value)||0,barcode:document.getElementById('np-barcode')?.value.trim()||'',sku:document.getElementById('np-sku')?.value.trim()||'',mustSell:!!document.getElementById('np-must')?.checked});
+  const newProd={id:'p'+Date.now(),name:nm,unit:document.getElementById('np-un')?.value.trim()||'وحدة',channelPrices,cost:parseFloat(document.getElementById('np-cost')?.value)||0,barcode:document.getElementById('np-barcode')?.value.trim()||'',sku:document.getElementById('np-sku')?.value.trim()||'',mustSell:!!document.getElementById('np-must')?.checked};
+  // حفظ في Supabase
+  if(window._sb && CC && CU && CU.role!=='super'){
+    try{
+      const {data,error}=await _sb.from('products').insert({
+        company_id:CC, name:nm, unit:newProd.unit,
+        channel_prices:channelPrices, cost:newProd.cost,
+        barcode:newProd.barcode||null, sku:newProd.sku||null, must_sell:newProd.mustSell
+      }).select().single();
+      if(error){ console.warn('[products] خطأ حفظ:',error.message); showToast('⚠️ خطأ في الحفظ: '+error.message); return; }
+      if(data?.id){ newProd._sbId=data.id; }
+      console.log('[products] ✅ اتحفظ:',nm);
+    }catch(e){ console.warn('[products] استثناء:',e); showToast('⚠️ خطأ في الاتصال'); return; }
+  }
+  DB.products[CC].push(newProd);
   closeMod();rebuildPage('products');showToast('✓ تمت إضافة '+nm);
 }
 function editProduct(pid){
@@ -14208,10 +14222,29 @@ function saveEditProduct(pid){
   });
   p.mustSell=!!document.getElementById('ep-must')?.checked;
   p.cost=parseFloat(document.getElementById('ep-cost')?.value)||0;
+  // حفظ التعديل في Supabase
+  if(window._sb && CC && CU && CU.role!=='super' && p._sbId){
+    _sb.from('products').update({
+      name:p.name, unit:p.unit, channel_prices:p.channelPrices,
+      cost:p.cost, must_sell:p.mustSell
+    }).eq('id',p._sbId).then(({error})=>{
+      if(error) console.warn('[products] خطأ تعديل:',error.message);
+      else console.log('[products] ✅ اتعدّل:',p.name);
+    });
+  }
   closeMod();rebuildPage('products');showToast('✓ تم الحفظ');
 }
-function delProduct(pid){
+async function delProduct(pid){
   if(!DB.products[CC])return;
+  const p=DB.products[CC].find(x=>x.id===pid);
+  // حذف من Supabase
+  if(window._sb && CC && CU && CU.role!=='super' && p?._sbId){
+    try{
+      const {error}=await _sb.from('products').delete().eq('id',p._sbId);
+      if(error){ console.warn('[products] خطأ حذف:',error.message); showToast('⚠️ خطأ في الحذف'); return; }
+      console.log('[products] ✅ اتحذف');
+    }catch(e){ console.warn('[products] استثناء حذف:',e); showToast('⚠️ خطأ في الاتصال'); return; }
+  }
   const idx=DB.products[CC].findIndex(x=>x.id===pid);
   if(idx>=0)DB.products[CC].splice(idx,1);
   rebuildPage('products');showToast('تم الحذف');
@@ -16304,9 +16337,18 @@ function confirmDeleteClient(cid){
     if(confirm) confirm.onclick=()=>deleteClient(cid);
   },50);
 }
-function deleteClient(cid){
+async function deleteClient(cid){
   const c=gC(cid); if(!c)return;
   const name=c.name, id=c.id;
+  // حذف من Supabase أولاً
+  if(window._sb && CC && CU && CU.role!=='super'){
+    try{
+      // نحذف بالـ display_id (رقم العميل) داخل الشركة
+      const {error}=await _sb.from('clients').delete().eq('display_id',id).eq('company_id',CC);
+      if(error){ console.warn('[clients] خطأ حذف:',error.message); showToast('⚠️ خطأ في الحذف: '+error.message); return; }
+      console.log('[clients] ✅ اتحذف:',name);
+    }catch(e){ console.warn('[clients] استثناء حذف:',e); showToast('⚠️ خطأ في الاتصال'); return; }
+  }
   const idx=DB.clients.findIndex(x=>x.id===cid);
   if(idx>=0) DB.clients.splice(idx,1);
   logActivity('delete','🗑 حُذف: '+name+' ('+id+')');
@@ -16384,6 +16426,18 @@ function saveClientStatus(cid){
   if($('ecs-grace')?.value!=='' && $('ecs-grace')) c.graceDays=Math.max(0,parseInt($('ecs-grace').value)||0);
   c.lastOrder=parseInt($('ecs-lo')?.value)||c.lastOrder;
   const due=$('ecs-due')?.value; if(due) c.dueDate=due;
+  // حفظ التعديل في Supabase
+  if(window._sb && CC && CU && CU.role!=='super'){
+    _sb.from('clients').update({
+      name:c.name, channel:c.channel, region:c.region||null,
+      agent_id:c.agent||null, phone:c.phone||null, rating:c.rating,
+      ty_sales:c.ty, shelf_share:c.share, credit_limit:c.creditLimit||0,
+      status:c.status||'نشط', last_order_days:c.lastOrder
+    }).eq('display_id',c.id).eq('company_id',CC).then(({error})=>{
+      if(error) console.warn('[clients] خطأ تعديل:',error.message);
+      else console.log('[clients] ✅ اتعدّل:',c.name);
+    });
+  }
   closeMod();
   ['clients','dashboard','radar','collections'].forEach(rebuildPage);
   showToast(isRTL()?'✓ تم تحديث بيانات العميل':'✓ Client updated');
@@ -18229,9 +18283,12 @@ async function sbLoadCompanyData(companyId){
     const {data: products, error: pErr} = await window._sbCall(
       _sb.from('products').select('*').eq('company_id', companyId), 8000
     );
-    if(!pErr && products && products.length > 0){
-      DB.products = products.map(p=>({
-        id: p.id,
+    if(!pErr && products){
+      // المنتجات تتخزن حسب الشركة DB.products[CC]
+      if(!DB.products || Array.isArray(DB.products)) DB.products = {};
+      DB.products[companyId] = products.map(p=>({
+        id: 'p_'+p.id,
+        _sbId: p.id,
         company: p.company_id,
         name: p.name,
         unit: p.unit || 'كرتون',
@@ -18239,6 +18296,7 @@ async function sbLoadCompanyData(companyId){
         barcode: p.barcode || '',
         sku: p.sku || '',
         channelPrices: p.channel_prices || {},
+        mustSell: p.must_sell || false,
         active: p.active !== false
       }));
       console.log('[Data] ✅ منتجات محملة:', products.length);
