@@ -18144,6 +18144,34 @@ async function sbLoadCompanyData(companyId){
   if(!companyId){ console.warn('[Data] مفيش company_id'); return; }
   console.log('[Data] جاري تحميل بيانات الشركة:', companyId);
   try {
+    // جلب بيانات الشركة نفسها (الاسم، الشعار، الباقة...) عشان تظهر صح في الفواتير والكشوف
+    const {data: coData, error: coErr} = await window._sbCall(
+      _sb.from('companies').select('*').eq('id', companyId).single(), 8000
+    );
+    if(!coErr && coData){
+      const idx = DB.companies.findIndex(x=>x.id===companyId);
+      const mappedCo = {
+        id: coData.id,
+        name: coData.name,
+        country: coData.country || '',
+        plan: (coData.plan||'starter').charAt(0).toUpperCase()+(coData.plan||'starter').slice(1),
+        active: coData.status === 'active' || coData.status === 'trial',
+        logo: coData.logo || '🏢',
+        commercialReg: coData.commercial_reg || '',
+        taxNumber: coData.tax_number || '',
+        phone: coData.phone || '',
+        email: coData.email || '',
+        address: coData.address || '',
+        subStart: coData.sub_start || '',
+        subEnd: coData.sub_end || '',
+        subMonths: 12,
+        _fromSupabase: true
+      };
+      if(idx>=0) Object.assign(DB.companies[idx], mappedCo);
+      else DB.companies.push(mappedCo);
+      console.log('[Data] ✅ بيانات الشركة محمّلة:', coData.name);
+    }
+
     // جلب العملاء
     const {data: clients, error: cErr} = await window._sbCall(
       _sb.from('clients').select('*').eq('company_id', companyId), 8000
