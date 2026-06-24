@@ -6413,30 +6413,60 @@ function onAddAccountRoleChange(){
   const supers=DB.users.filter(u=>u.company===CC&&u.role==='supervisor'&&u.active!==false);
   const supF=$('aa-field-super'); if(supF) supF.style.display=(role==='agent'&&supers.length)?'block':'none';
 }
-function saveNewAccount(){
+async function saveNewAccount(){
   const L=(ar,en)=>isRTL()?ar:en;
   const role=$('aa-role')?.value;
   const n=$('aa-n')?.value.trim(), u=$('aa-u')?.value.trim(), p=$('aa-p')?.value.trim();
   if(!n||!u||!p){ showToast(L('⚠️ املأ الحقول الإلزامية','⚠️ Fill required fields')); return; }
-  if(DB.users.find(x=>x.username===u && x.company===CC)){ showToast(L('⚠️ اسم المستخدم موجود مسبقاً في شركتك','⚠️ Username already exists in your company')); return; }
+  if(!u.includes('@')){ showToast(L('⚠️ يجب أن يكون إيميل صحيح (مثال: name@domain.com)','⚠️ Must be a valid email')); return; }
+  if(p.length<6){ showToast(L('⚠️ كلمة المرور يجب أن تكون 6 أحرف على الأقل','⚠️ Password must be at least 6 characters')); return; }
+  if(DB.users.find(x=>x.username===u && x.company===CC)){ showToast(L('⚠️ الإيميل موجود مسبقاً في شركتك','⚠️ Email already exists in your company')); return; }
   if(!creatableRoles().includes(role)){ showToast(L('🔒 غير مصرّح بهذا الدور','🔒 Not allowed')); return; }
   // collect selected permissions
   const perms=Array.from(document.querySelectorAll('.perm-cb')).filter(cb=>cb.checked).map(cb=>cb.value);
   const avCs=['avB','avG','avP','avA','avR','avT'];
   const needsApproval=accountNeedsApproval(CU.role);
-  // determine the supervisor/parent for agents
   let createdBy=CU.id;
   const chosenSuper=$('aa-super')?.value;
   if(role==='agent'&&chosenSuper) createdBy=chosenSuper;
+  const regionVal=$('aa-r')?.value||'';
+  const targetVal=parseInt($('aa-t')?.value)||0;
+  // ── Supabase: إنشاء Auth user عبر Edge Function ──
+  if(window._sb && CC && CU && CU.role!=='super'){
+    try{
+      showToast('⏳ '+L('جاري إنشاء الحساب...','Creating account...'));
+      const {data:sessionData}=await window._sb.auth.getSession();
+      const accessToken=sessionData?.session?.access_token;
+      if(!accessToken){ showToast('⚠️ '+L('يجب تسجيل الدخول أولاً','Must be logged in')); return; }
+      const resp=await fetch('https://jbkjxmrvnneivkryugka.supabase.co/functions/v1/add-company-admin',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken},
+        body:JSON.stringify({companyId:CC, adminEmail:u, adminPassword:p, adminName:n, role, region:regionVal, target:targetVal, perms})
+      });
+      const result=await resp.json();
+      if(!resp.ok||result.error){ showToast('❌ '+(result.error||L('فشل إنشاء الحساب','Failed to create account'))); return; }
+      // تحديث محلي للعرض
+      const sbId=result.userId||result.id||('u'+Date.now());
+      const newUser={id:sbId,_sbId:sbId,username:u,email:u,name:n,role,company:CC,region:regionVal,target:targetVal,lineCode:'',avatar:n.charAt(0),avC:avCs[DB.users.length%avCs.length],perms,createdBy,active:true};
+      DB.users.push(newUser);
+      if(typeof logAudit==='function') logAudit('account',L('أضاف حساب '+roleLabel(role)+': '+n,'Added '+roleLabel(role)+': '+n),'normal');
+      closeMod(); rebuildPage('agents'); rebuildPage('dashboard');
+      showToast('✅ '+L('تمت إضافة الحساب — الإيميل: ','Account created — email: ')+u);
+    }catch(e){
+      console.error('[saveNewAccount]',e);
+      showToast('❌ '+L('خطأ في الاتصال بالسيرفر','Server connection error'));
+    }
+    return;
+  }
+  // ── fallback محلي (بدون Supabase) ──
   const newUser={
     id:'u'+Date.now(), username:u, pass:p, name:n, role, company:CC,
-    region:$('aa-r')?.value||'', target:parseInt($('aa-t')?.value)||0,
+    region:regionVal, target:targetVal,
     lineCode:'', avatar:n.charAt(0), avC:avCs[DB.users.length%avCs.length],
     perms, createdBy, active:!needsApproval,
   };
   DB.users.push(newUser);
   if(needsApproval){
-    // notify the creator's manager for approval
     const mgr=userManager(CU);
     if(mgr){
       DB.notifs.unshift({id:'n'+Date.now(),type:'amber',title:L('👤 حساب جديد بانتظار اعتمادك','👤 New account awaiting approval'),body:(isRTL()?CU.name+' أنشأ حساب '+roleLabel(role)+': '+n:CU.name+' created a '+roleLabel(role)+': '+n),time:L('الآن','now'),read:false,link:'agents',forUser:mgr.id});
@@ -6519,14 +6549,44 @@ function openAddAgent(){
     </div>
   `);
 }
-function saveAddAgent(){
+async function saveAddAgent(){
   const n=$('na-n').value.trim(),u=$('na-u').value.trim(),p=$('na-p').value.trim();
   if(!n||!u||!p){showToast('⚠️ الرجاء ملء الحقول الإلزامية');return;}
-  if(DB.users.find(x=>x.username===u && x.company===CC)){showToast('⚠️ اسم المستخدم موجود مسبقاً في شركتك');return;}
+  if(!u.includes('@')){showToast('⚠️ يجب أن يكون إيميل صحيح (مثال: name@domain.com)');return;}
+  if(p.length<6){showToast('⚠️ كلمة المرور يجب أن تكون 6 أحرف على الأقل');return;}
+  if(DB.users.find(x=>x.username===u && x.company===CC)){showToast('⚠️ الإيميل موجود مسبقاً في شركتك');return;}
   const avCs=['avB','avG','avP','avA','avR','avT'];
+  const regionVal=$('na-r')?.value||'';
+  const targetVal=parseInt($('na-t')?.value)||0;
+  const lineCode=$('na-l')?.value.trim()||'';
+  if(window._sb && CC && CU && CU.role!=='super'){
+    try{
+      showToast('⏳ جاري إنشاء حساب المندوب...');
+      const {data:sessionData}=await window._sb.auth.getSession();
+      const accessToken=sessionData?.session?.access_token;
+      if(!accessToken){showToast('⚠️ يجب تسجيل الدخول أولاً');return;}
+      const resp=await fetch('https://jbkjxmrvnneivkryugka.supabase.co/functions/v1/add-company-admin',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken},
+        body:JSON.stringify({companyId:CC,adminEmail:u,adminPassword:p,adminName:n,role:'agent',region:regionVal,target:targetVal,lineCode})
+      });
+      const result=await resp.json();
+      if(!resp.ok||result.error){showToast('❌ '+(result.error||'فشل إنشاء حساب المندوب'));return;}
+      const sbId=result.userId||result.id||('u'+Date.now());
+      DB.users.push({id:sbId,_sbId:sbId,username:u,email:u,name:n,role:'agent',company:CC,
+        region:regionVal,target:targetVal,lineCode,avatar:n.charAt(0),
+        avC:avCs[DB.users.filter(x=>x.company===CC&&x.role==='agent').length%avCs.length]});
+      closeMod();rebuildPage('agents');rebuildPage('dashboard');
+      showToast('✅ تمت إضافة المندوب — الإيميل: '+u);
+    }catch(e){
+      console.error('[saveAddAgent]',e);
+      showToast('❌ خطأ في الاتصال بالسيرفر');
+    }
+    return;
+  }
   DB.users.push({id:'u'+Date.now(),username:u,pass:p,name:n,role:'agent',company:CC,
-    region:$('na-r')?.value||'',target:parseInt($('na-t')?.value)||0,
-    lineCode:$('na-l')?.value.trim()||'',avatar:n.charAt(0),
+    region:regionVal,target:targetVal,
+    lineCode,avatar:n.charAt(0),
     avC:avCs[DB.users.filter(x=>x.company===CC&&x.role==='agent').length%avCs.length]});
   closeMod();rebuildPage('agents');rebuildPage('dashboard');showToast(`✓ تمت إضافة ${n}`);
 }
@@ -6565,26 +6625,35 @@ function openEditAgent(uid){
 }
 function eaPermsAll(on){ document.querySelectorAll('.ea-perm-cb').forEach(cb=>cb.checked=on); }
 function eaPermsReset(role){ const def=ROLE_DEFAULT_PERMS[role]||[]; document.querySelectorAll('.ea-perm-cb').forEach(cb=>cb.checked=def.includes(cb.value)); }
-function saveEditAgent(uid){
+async function saveEditAgent(uid){
   const u=gU(uid);
   u.name=$('ea-n').value.trim()||u.name;
   u.avatar=u.name.charAt(0);
   u.region=$('ea-r')?.value||u.region;
   u.target=parseInt($('ea-t')?.value)||u.target;
   u.lineCode=$('ea-l')?.value.trim()||u.lineCode;
-  // username change (with uniqueness check)
   const nu=$('ea-u')?.value.trim();
   if(nu && nu!==u.username){
-    if(DB.users.find(x=>x.username===nu && x.id!==u.id && x.company===CC)){ showToast('⚠️ '+(isRTL()?'اسم المستخدم موجود مسبقاً في شركتك':'Username already exists in your company')); return; }
+    if(DB.users.find(x=>x.username===nu && x.id!==u.id && x.company===CC)){ showToast('⚠️ '+(isRTL()?'الإيميل موجود مسبقاً في شركتك':'Email already exists in your company')); return; }
     u.username=nu;
   }
   const np=$('ea-p')?.value.trim();if(np)u.pass=np;
-  // save custom permissions (if the editor was shown)
   const permCbs=document.querySelectorAll('.ea-perm-cb');
   if(permCbs.length){
     const newPerms=[...permCbs].filter(cb=>cb.checked).map(cb=>cb.value);
     u.perms=newPerms;
     if(typeof logAudit==='function') logAudit('permissions',(isRTL()?'تعديل صلاحيات ':'Updated permissions ')+u.name,'warning');
+  }
+  // ── Supabase: update profile ──
+  if(window._sb && CC && CU && CU.role!=='super' && (u._sbId||u.id)){
+    const sbId=u._sbId||u.id;
+    window._sbCall(window._sb.from('profiles').update({
+      full_name:u.name,
+      region:u.region,
+      target:u.target,
+      line_code:u.lineCode||'',
+      perms:u.perms||[]
+    }).eq('id',sbId),8000).catch(e=>console.warn('[sb edit agent]',e));
   }
   closeMod();rebuildPage('agents');showToast(isRTL()?'✓ تم حفظ بيانات الحساب':'✓ Account saved');
 }
@@ -6595,9 +6664,16 @@ function confirmDelAgent(uid){
     <div class="m-foot"><button class="btn btnG btn-sm" onclick="closeMod()">إلغاء</button><button class="btn btnD btn-sm" onclick="delAgent('${uid}')">حذف</button></div>
   `);
 }
-function delAgent(uid){
-  const idx=DB.users.findIndex(u=>u.id===uid);if(idx>=0)DB.users.splice(idx,1);
+async function delAgent(uid){
+  const u=gU(uid);
+  const idx=DB.users.findIndex(x=>x.id===uid);if(idx>=0)DB.users.splice(idx,1);
   DB.clients.forEach(c=>{if(c.agent===uid)c.agent='';});
+  // ── Supabase: deactivate profile (لا نحذف Auth user لأنه يحتاج service_role) ──
+  if(window._sb && CC && CU && CU.role!=='super' && u){
+    const sbId=u._sbId||uid;
+    window._sbCall(window._sb.from('profiles').update({active:false}).eq('id',sbId),8000)
+      .catch(e=>console.warn('[sb del agent]',e));
+  }
   closeMod();rebuildPage('agents');showToast('تم الحذف');
 }
 
