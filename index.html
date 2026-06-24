@@ -6668,11 +6668,22 @@ async function delAgent(uid){
   const u=gU(uid);
   const idx=DB.users.findIndex(x=>x.id===uid);if(idx>=0)DB.users.splice(idx,1);
   DB.clients.forEach(c=>{if(c.agent===uid)c.agent='';});
-  // ── Supabase: حذف من profiles — الـ Auth user يفضل موجود بس مفيش profile = مش بيقدر يدخل ──
+  // ── Supabase: حذف Auth user كامل عبر Edge Function ──
   if(window._sb && CC && CU && CU.role!=='super' && u){
     const sbId=u._sbId||uid;
-    window._sbCall(window._sb.from('profiles').delete().eq('id',sbId).eq('company_id',CC),8000)
-      .catch(e=>console.warn('[sb del agent]',e));
+    try{
+      const {data:sess}=await window._sb.auth.getSession();
+      const token=sess?.session?.access_token;
+      if(token){
+        const resp=await fetch('https://jbkjxmrvnneivkryugka.supabase.co/functions/v1/delete-user',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+          body:JSON.stringify({userId:sbId})
+        });
+        const result=await resp.json();
+        if(!resp.ok||result.error) console.warn('[del agent]',result.error);
+      }
+    }catch(e){console.warn('[del agent]',e);}
   }
   closeMod();rebuildPage('agents');showToast('تم الحذف');
 }
