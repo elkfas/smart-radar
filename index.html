@@ -6668,10 +6668,10 @@ async function delAgent(uid){
   const u=gU(uid);
   const idx=DB.users.findIndex(x=>x.id===uid);if(idx>=0)DB.users.splice(idx,1);
   DB.clients.forEach(c=>{if(c.agent===uid)c.agent='';});
-  // ── Supabase: حذف من profiles (Auth user يفضل موجود للسجل بس مش بيظهر) ──
+  // ── Supabase: حذف من profiles — الـ Auth user يفضل موجود بس مفيش profile = مش بيقدر يدخل ──
   if(window._sb && CC && CU && CU.role!=='super' && u){
     const sbId=u._sbId||uid;
-    window._sbCall(window._sb.from('profiles').delete().eq('id',sbId),8000)
+    window._sbCall(window._sb.from('profiles').delete().eq('id',sbId).eq('company_id',CC),8000)
       .catch(e=>console.warn('[sb del agent]',e));
   }
   closeMod();rebuildPage('agents');showToast('تم الحذف');
@@ -16419,8 +16419,8 @@ async function deleteClient(cid){
   // حذف من Supabase أولاً
   if(window._sb && CC && CU && CU.role!=='super'){
     try{
-      // نحذف بالـ UUID (id الحقيقي في Supabase)
-      const {error}=await _sb.from('clients').delete().eq('id',c._sbId||c.id).eq('company_id',CC);
+      // نحذف بالـ display_id (رقم العميل) داخل الشركة
+      const {error}=await _sb.from('clients').delete().eq('display_id',id).eq('company_id',CC);
       if(error){ console.warn('[clients] خطأ حذف:',error.message); showToast('⚠️ خطأ في الحذف: '+error.message); return; }
       console.log('[clients] ✅ اتحذف:',name);
     }catch(e){ console.warn('[clients] استثناء حذف:',e); showToast('⚠️ خطأ في الاتصال'); return; }
@@ -18143,7 +18143,9 @@ window._sbCall = function(promise, ms=5000){
         _enterApp(autoUser);
         return; // وقف — مش محتاج يكمل
       } else {
-        console.warn('[Session] ⚠️ مفيش profile لهذا المستخدم — هيدخل يدوي. خطأ:', profRes?.error);
+        // مفيش profile = حساب محذوف أو غير مهيّأ → signOut فوراً
+        console.warn('[Session] ⚠️ مفيش profile — جاري تسجيل الخروج تلقائياً');
+        _sb.auth.signOut().catch(()=>{});
       }
     } else {
       console.log('[Session] ⚠️ مفيش session محفوظة في Supabase — هتظهر شاشة الدخول');
@@ -18250,7 +18252,6 @@ async function sbLoadAllCompanies(){
         if(!DB.users.find(u=>u.id===pr.id)){
           DB.users.push({
             id: pr.id,
-            _sbId: pr.id,
             company: pr.company_id,
             username: pr.full_name || pr.id,
             email: pr.email || '',
@@ -18312,8 +18313,7 @@ async function sbLoadCompanyData(companyId){
     if(!cErr && clients){
       // حذف البيانات الوهمية واستبدالها ببيانات الشركة الحقيقية
       DB.clients = clients.map(c=>({
-        id: c.display_id || c.id,
-        _sbId: c.id,
+        id: c.id,
         company: c.company_id,
         displayId: c.display_id || c.id.substring(0,6).toUpperCase(),
         name: c.name,
