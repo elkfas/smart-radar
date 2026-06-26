@@ -2042,13 +2042,13 @@ function checkStockAlerts(){
   const low=items.filter(x=>x.low);
   const where=(CU.role==='agent')?(isRTL()?'سيارتك':'your van'):(isRTL()?'مخزون الشركة':'company stock');
   if(out.length>0){
-    DB.notifs.unshift({id:'n'+Date.now()+'a',type:'red',
+    DB.notifs.unshift({id:'n'+Date.now()+'a',type:'red',company:CC,
       title:isRTL()?'🚫 أصناف نفدت من المخزون':'🚫 Items out of stock',
       body:(isRTL()?out.length+' صنف نفد من '+where+': ':out.length+' item(s) out in '+where+': ')+out.slice(0,3).map(x=>x.product.name).join('، '),
       time:isRTL()?'الآن':'now',read:false,link:'stock'});
   }
   if(low.length>0){
-    DB.notifs.unshift({id:'n'+Date.now()+'b',type:'amber',
+    DB.notifs.unshift({id:'n'+Date.now()+'b',type:'amber',company:CC,
       title:isRTL()?'⚠️ أصناف قاربت على النفاد':'⚠️ Items running low',
       body:(isRTL()?low.length+' صنف قارب في '+where+': ':low.length+' item(s) low in '+where+': ')+low.slice(0,3).map(x=>x.product.name).join('، '),
       time:isRTL()?'الآن':'now',read:false,link:'stock'});
@@ -2062,13 +2062,13 @@ function checkSubscriptionExpiry(){
   window._subWarned=window._subWarned||{};
   if(window._subWarned[CC]) return;
   if(dl<0){
-    DB.notifs.unshift({id:'n'+Date.now(),type:'red',
+    DB.notifs.unshift({id:'n'+Date.now(),type:'red',company:CC,
       title:isRTL()?'🚫 انتهى الاشتراك':'🚫 Subscription expired',
       body:isRTL()?'انتهى اشتراك شركتك بتاريخ '+fmtDate(s.end)+'. يُرجى التجديد.':'Your subscription expired on '+fmtDate(s.end)+'. Please renew.',
       time:isRTL()?'الآن':'now',read:false,link:'pricing'});
     window._subWarned[CC]=true; updateNotifBadge();
   } else if(dl<=30){
-    DB.notifs.unshift({id:'n'+Date.now(),type:'amber',
+    DB.notifs.unshift({id:'n'+Date.now(),type:'amber',company:CC,
       title:isRTL()?'⚠️ اشتراكك ينتهي قريباً':'⚠️ Subscription expiring soon',
       body:isRTL()?'سينتهي اشتراك شركتك خلال '+dl+' يوم بتاريخ '+fmtDate(s.end)+'. يُرجى التجديد.':'Your subscription expires in '+dl+' days on '+fmtDate(s.end)+'. Please renew.',
       time:isRTL()?'الآن':'now',read:false,link:'pricing'});
@@ -5360,11 +5360,17 @@ function rebuildPage(pg){
 // ═══════════════════════════════════
 function bSuper(el){
   const L=(ar,en)=>isRTL()?ar:en;
-  const totalUsers=DB.users.length;
-  const totalAgents=DB.users.filter(u=>u.role==='agent').length;
-  const totalManagers=DB.users.filter(u=>u.role==='admin').length;
+  // Super Dashboard — بيانات حقيقية من Supabase بس (مش DB seed)
+  // DB.users بعد إصلاح sbLoadAllCompanies بيحتوي على real users فقط
+  const realUsers = DB.users.filter(u=>u.role!=='super' && u._sbId); // real Supabase users only
+  const totalUsers=realUsers.length;
+  const totalAgents=realUsers.filter(u=>u.role==='agent').length;
+  const totalManagers=realUsers.filter(u=>u.role==='admin').length;
   const totalClients=DB.clients.length;
-  const totalRevenue=DB.orders.reduce((a,o)=>a+(o.total||0),0);
+  // Revenue من SR لو متاح
+  const totalRevenue = window.SR?.ready
+    ? window.SR.getDashboardMetrics().totalRevenue
+    : DB.orders.filter(o=>o.status==='مكتمل').reduce((a,o)=>a+(o.total||0),0);
   const activeCos=DB.companies.filter(c=>c.active).length;
   const inactiveCos=DB.companies.length-activeCos;
   // subscription breakdown
@@ -17273,7 +17279,10 @@ function showDailyTip(){
 function buildNotifs(){
   const l=$('nList');if(!l)return;
   // فلترة: إشعار بدون company يظهر للكل (نادر)، إشعار له company يظهر فقط لنفس الشركة الحالية
-  const visibleNotifs = DB.notifs.filter(n=> !n.company || n.company===CC );
+  const visibleNotifs = DB.notifs.filter(n=>
+    (n.company===CC) &&
+    (!n.forUser || n.forUser===CU?.id)
+  );
   l.innerHTML=visibleNotifs.slice(0,8).map(n=>`
     <div class="np-item" style="opacity:${n.read?.8:1}" onclick="openNotif('${n.id}')">
       <div style="display:flex;gap:8px;align-items:flex-start">
@@ -17310,7 +17319,12 @@ function openNotif(id){
   }
 }
 function updateNotifBadge(){
-  const u=DB.notifs.filter(n=>(!n.company || n.company===CC) && !n.read).length;
+  // فلتر: إشعار يظهر فقط لو company مطابقة، وforUser مطابق أو غير موجود
+  const u=DB.notifs.filter(n=>
+    (n.company===CC) &&
+    (!n.forUser || n.forUser===CU?.id) &&
+    !n.read
+  ).length;
   const b=$('nBadge');
   if(b){b.textContent=u;b.style.display=u>0?'flex':'none';}
 }
@@ -19641,6 +19655,19 @@ window._enterApp = function(user) {
     // SR.init has built-in guard — safe to call multiple times
     window.SR.init(user.company, userSbId, user.role)
       .then(() => {
+        // BUG 3 FIX: تحقق إن المستخدم الحالي مرتبط فعلاً بالشركة
+        if(CU && CU.role !== 'super' && CU._sbId){
+          const foundInCompany = window.SR?.getOrders && (() => {
+            // تحقق من profiles في DB.users (محمّلة من Supabase)
+            return DB.users.find(u => u._sbId === CU._sbId && u.company === CU.company);
+          })();
+          if(!foundInCompany && CU.role !== 'admin'){
+            // المستخدم مش موجود في الشركة — اطرده
+            console.warn('[SR] ⚠️ المستخدم غير مرتبط بالشركة — جاري تسجيل الخروج');
+            if(window._sb) window._sb.auth.signOut().catch(()=>{});
+            return;
+          }
+        }
         // بعد تحميل SR، أعد رسم الصفحة الحالية
         try {
           if (typeof renderCurrentPage === 'function') renderCurrentPage();
