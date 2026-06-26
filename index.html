@@ -727,47 +727,10 @@ const DB = {
     co2: ['القاهرة','الإسكندرية','الجيزة','المنصورة','أسيوط'],
     co3: ['دبي','أبوظبي','الشارقة','عجمان'],
   },
-  products: {
-    co1: [
-      {id:'p1',name:'زيت نباتي 4L',unit:'كرتون',cost:62,barcode:'6281000000011',sku:'OIL-4L',channelPrices:{'مطاعم وفنادق':80,'هايبر ماركت':82,'تجزئة':85,'جملة':78,'إعاشة':77,'شركات':75,'منازل وأفراد':88,'مستشفيات':80}},
-      {id:'p2',name:'سمن نباتي 2kg',unit:'كرتون',cost:88,barcode:'6281000000028',sku:'GHEE-2K',channelPrices:{'مطاعم وفنادق':115,'هايبر ماركت':118,'تجزئة':122,'جملة':110,'إعاشة':108,'شركات':105,'منازل وأفراد':125,'مستشفيات':115}},
-      {id:'p3',name:'دهن نباتي 1kg',unit:'كرتون',cost:46,barcode:'6281000000035',sku:'FAT-1K',channelPrices:{'مطاعم وفنادق':62,'هايبر ماركت':63,'تجزئة':65,'جملة':60,'إعاشة':59,'شركات':58,'منازل وأفراد':67,'مستشفيات':62}},
-      {id:'p4',name:'زيت زيتون 750ml',unit:'كرتون',cost:70,barcode:'6281000000042',sku:'OLIVE-750',channelPrices:{'مطاعم وفنادق':90,'هايبر ماركت':92,'تجزئة':95,'جملة':88,'إعاشة':87,'شركات':85,'منازل وأفراد':98,'مستشفيات':90}},
-    ],
-    co2:[
-      {id:'p5',name:'شاي أحمر 100g',unit:'كرتون',channelPrices:{'تجزئة':25,'جملة':22,'هايبر ماركت':24,'إعاشة':21,'شركات':20,'مطاعم وفنادق':24,'منازل وأفراد':26,'مستشفيات':24}},
-      {id:'p6',name:'قهوة سادة 500g',unit:'كرتون',channelPrices:{'تجزئة':60,'جملة':55,'هايبر ماركت':58,'إعاشة':54,'شركات':52,'مطاعم وفنادق':58,'منازل وأفراد':62,'مستشفيات':58}},
-    ],
-    co3:[
-      {id:'p7',name:'عصير برتقال 1L',unit:'كرتون',channelPrices:{'تجزئة':15,'جملة':13,'هايبر ماركت':14,'إعاشة':13,'شركات':12,'مطاعم وفنادق':14,'منازل وأفراد':16,'مستشفيات':14}},
-      {id:'p8',name:'مياه معدنية 500ml',unit:'كرتون',channelPrices:{'تجزئة':8,'جملة':7,'هايبر ماركت':7,'إعاشة':7,'شركات':6,'مطاعم وفنادق':7,'منازل وأفراد':9,'مستشفيات':7}},
-    ],
-  },
-  clients: [
-    {id:'C-1001',name:'مطعم الزهراني',channel:'مطاعم وفنادق',agent:'u2',company:'co1',region:'جدة',ly:150000,ty:176000,share:.44,debt:0,lastOrder:2,lat:21.5,lng:39.2,rating:'ممتاز',status:'نشط'},
-    {id:'C-1002',name:'سوبرماركت النور',channel:'تجزئة',agent:'u3',company:'co1',region:'جدة',ly:180000,ty:180000,share:.575,debt:0,lastOrder:8,lat:21.49,lng:39.18,rating:'ثابت',status:'نشط'},
-    {id:'C-1003',name:'فندق الكورنيش',channel:'مطاعم وفنادق',agent:'u2',company:'co1',region:'الدمام',ly:200000,ty:210000,share:.70,debt:0,lastOrder:5,lat:26.43,lng:50.1,rating:'نامٍ',status:'نشط',crNumber:'2050012345',taxNumber:'300012345600003',phone:'0138012345',address:'الدمام، حي الشاطئ، طريق الكورنيش'},
-    {id:'C-1004',name:'مخبز السعادة',channel:'جملة',agent:'u3',company:'co1',region:'مكة المكرمة',ly:35000,ty:32000,share:.38,debt:1000,lastOrder:45,lat:21.4,lng:39.82,rating:'مدين',status:'نشط'},
-    {id:'C-1005',name:'بقالة الأمانة',channel:'منازل وأفراد',agent:'u2',company:'co1',region:'الرياض',ly:15000,ty:13000,share:.25,debt:5000,lastOrder:419,lat:24.69,lng:46.72,rating:'مدين',status:'نشط'},
-    {id:'C-1006',name:'هايبر بندة',channel:'هايبر ماركت',agent:'u3',company:'co1',region:'جدة',ly:300000,ty:315000,share:.65,debt:200,lastOrder:3,lat:21.52,lng:39.21,rating:'مدين',status:'نشط'},
-    {id:'C-1007',name:'مطاعم الريف',channel:'مطاعم وفنادق',agent:'u2',company:'co1',region:'القصيم',ly:95000,ty:88000,share:.50,debt:0,lastOrder:18,lat:26.33,lng:43.98,rating:'متراجع',status:'نشط'},
-    {id:'C-1008',name:'سوبرماركت الشعلة',channel:'تجزئة',agent:'u3',company:'co1',region:'الطائف',ly:80000,ty:84000,share:.58,debt:1500,lastOrder:6,lat:21.26,lng:40.41,rating:'نامٍ',status:'نشط'},
-    {id:'C-1009',name:'مستشفى الجبل',channel:'مستشفيات',agent:'u3',company:'co1',region:'أبها',ly:45000,ty:46000,share:.72,debt:0,lastOrder:10,lat:18.22,lng:42.5,rating:'ثابت',status:'نشط'},
-    {id:'C-1010',name:'شركة الخليج',channel:'إعاشة',agent:'u3',company:'co1',region:'الدمام',ly:150000,ty:162000,share:.68,debt:0,lastOrder:4,lat:26.42,lng:50.09,rating:'نامٍ',status:'نشط'},
-    {id:'C-1011',name:'بقالة الحرم',channel:'شركات',agent:'u2',company:'co1',region:'مكة المكرمة',ly:22000,ty:19000,share:.20,debt:8000,lastOrder:55,lat:21.42,lng:39.83,rating:'مدين',status:'نشط',creditLimit:6000},
-  ],
-  orders: [
-    {id:'ORD-001',client:'C-1001',agent:'u2',company:'co1',items:[{product:'زيت نباتي 4L',pid:'p1',qty:50,price:85,subtotal:4250},{product:'سمن نباتي 2kg',pid:'p2',qty:10,price:120,subtotal:1200}],total:5450,date:'2024-06-01',status:'مكتمل',notes:''},
-    {id:'ORD-002',client:'C-1003',agent:'u2',company:'co1',items:[{product:'سمن نباتي 2kg',pid:'p2',qty:30,price:120,subtotal:3600}],total:3600,date:'2024-06-02',status:'مكتمل',notes:''},
-    {id:'ORD-003',client:'C-1006',agent:'u3',company:'co1',items:[{product:'زيت نباتي 4L',pid:'p1',qty:200,price:82,subtotal:16400},{product:'دهن نباتي 1kg',pid:'p3',qty:50,price:65,subtotal:3250}],total:19650,date:'2024-06-03',status:'مكتمل',notes:''},
-    {id:'ORD-004',client:'C-1010',agent:'u3',company:'co1',items:[{product:'سمن نباتي 2kg',pid:'p2',qty:80,price:118,subtotal:9440}],total:9440,date:'2024-06-04',status:'قيد المراجعة',notes:''},
-    {id:'ORD-005',client:'C-1008',agent:'u3',company:'co1',items:[{product:'دهن نباتي 1kg',pid:'p3',qty:40,price:95,subtotal:3800},{product:'زيت زيتون 750ml',pid:'p4',qty:20,price:95,subtotal:1900}],total:5700,date:'2024-06-05',status:'مكتمل',notes:''},
-  ],
-  notifs: [
-    {id:'n1',type:'red',title:'مديونية متأخرة',body:'بقالة الحرم — 8,000 ريال',time:'منذ 5 دقائق',read:false,link:'collections',company:'co1'},
-    {id:'n2',type:'amber',title:'تنبيه Churn',body:'بقالة الأمانة — 419 يوم',time:'منذ 12 دقيقة',read:false,link:'clients',ref:'C-1005',company:'co1'},
-    {id:'n3',type:'blue',title:'طلب دعم',body:'شريف — مطاعم الريف',time:'منذ 28 دقيقة',read:false,link:'dashboard',company:'co1'},
-  ],
+  products: {},
+  clients: [],
+  orders: [],
+  notifs: [],
   // companySettings: per-company config { vat, agentPermissions, channels }
   companySettings: {
     co1: {
@@ -791,14 +754,8 @@ const DB = {
   // Live agent locations {agentId:{lat,lng,time,online}}
   agentLocations: {},
   // Warehouse stock per company: {companyId:{productId:qty}}
-  stock: {
-    co1:{p1:120,p2:8,p3:200,p4:0},
-  },
-  // Agent (van) stock: {agentId:{productId:qty}}
-  agentStock: {
-    u2:{p1:15,p2:3,p3:20,p4:0},
-    u3:{p1:10,p2:0,p3:12,p4:4},
-  },
+  stock: {},
+  agentStock: {},
   // Low-stock thresholds {productId:threshold} (default 10 if not set)
   stockThreshold: {},
   // Daily plans {userId_date:{...targets}}
