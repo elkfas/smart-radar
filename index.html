@@ -5132,6 +5132,14 @@ function initApp(){
   // Agent: start live location tracking so manager can see position
   ensureCreditFields();
   if(typeof logAudit==='function') logAudit('login',(isRTL()?'تسجيل دخول':'Login'),'normal');
+  // TRACE localStorage
+  var _lsKeys = Object.keys(localStorage);
+  console.log('[LS TRACE] keys:', JSON.stringify(_lsKeys.slice(0,10)));
+  _lsKeys.forEach(function(k){
+    if(k.toLowerCase().includes('notif')||k.toLowerCase().includes('db')||k.toLowerCase().includes('smart')){
+      try{ var v=JSON.parse(localStorage.getItem(k)); console.log('[LS TRACE] key='+k+' notifs=', v&&v.notifs&&v.notifs.length); }catch(e){}
+    }
+  });
   seedDynamicData();
   reconcileOpeningBalances();
   if(CU.role!=='super'){ startAgentTracking(); } // track everyone except super so managers see their whole team
@@ -17276,12 +17284,10 @@ function openNotif(id){
   }
 }
 function updateNotifBadge(){
-  // فلتر: إشعار يظهر فقط لو company مطابقة، وforUser مطابق أو غير موجود
-  const u=DB.notifs.filter(n=>
-    (n.company===CC) &&
-    (!n.forUser || n.forUser===CU?.id) &&
-    !n.read
-  ).length;
+  console.log('[NOTIF TRACE] CC='+CC+' | total notifs='+DB.notifs.length);
+  DB.notifs.forEach(function(n,i){ if(!n.read) console.log('[NOTIF TRACE] unread #'+i+': company='+n.company+' title='+n.title); });
+  const u=DB.notifs.filter(function(n){ return (n.company===CC) && (!n.forUser || n.forUser===(CU&&CU.id)) && !n.read; }).length;
+  console.log('[NOTIF TRACE] badge count='+u);
   const b=$('nBadge');
   if(b){b.textContent=u;b.style.display=u>0?'flex':'none';}
 }
@@ -18185,29 +18191,46 @@ function hideResetPassword(){
 // التحقق من الـ URL — هل هو reset link من Supabase؟
 // Supabase بيرجع اللينك فيه hash زي: #access_token=...&type=recovery
 function _checkPasswordResetLink(){
-  if(!window.location.hash) return false;
-  const hash = window.location.hash;
-  if(hash.includes('type=recovery') || hash.includes('type=signup')){
-    console.log('[ResetPwd] تم اكتشاف reset link في الـ URL');
-    // Supabase عالج الـ token تلقائياً وعنده session نشطة
-    // بنتأكد من الـ session ونفتح شاشة تغيير الباسورد
+  // Supabase PKCE flow: token في query params (?code=xxx)
+  // Supabase Legacy flow: token في hash (#access_token=xxx&type=recovery)
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace('#',''));
+  const isRecoveryHash = window.location.hash.includes('type=recovery');
+  const hasCode = searchParams.has('code'); // PKCE flow
+  console.log('[ResetPwd] URL check — hash='+window.location.hash+' search='+window.location.search);
+  console.log('[ResetPwd] isRecoveryHash='+isRecoveryHash+' hasCode='+hasCode);
+  if(isRecoveryHash || hasCode){
+    console.log('[ResetPwd] تم اكتشاف reset link');
+    // أخفي كل الشاشات أولاً
+    document.getElementById('loginScreen')?.classList.remove('active');
+    document.getElementById('appScreen')?.classList.remove('active');
+    // اعرض شاشة loading مؤقتة
+    document.body.style.background = 'var(--bg)';
     (async ()=>{
       try {
-        const { data: sess } = await window._sbCall(_sb.auth.getSession(), 5000);
+        // انتظر Supabase يعالج الـ token (خصوصاً PKCE)
+        await new Promise(r=>setTimeout(r, 1500));
+        const { data: sess } = await window._sbCall(_sb.auth.getSession(), 8000);
+        console.log('[ResetPwd] session after wait:', sess?.session?.user?.email);
         if(sess && sess.session){
           console.log('[ResetPwd] Session جاهزة — فتح شاشة تغيير الباسورد');
-          document.getElementById('loginScreen').classList.remove('active');
-          document.getElementById('appScreen').classList.remove('active');
           const rp = document.getElementById('resetPwdScreen');
-          rp.style.display = 'flex';
-          rp.classList.add('active');
-          setTimeout(()=>document.getElementById('rp-p1')?.focus(), 100);
+          if(rp){
+            rp.style.display = 'flex';
+            rp.classList.add('active');
+            setTimeout(()=>document.getElementById('rp-p1')?.focus(), 100);
+          }
         } else {
-          console.warn('[ResetPwd] مفيش session — اللينك انتهت صلاحيته');
-          alert('⚠️ اللينك انتهت صلاحيته أو تم استخدامه من قبل.\nاطلب لينك جديد من صفحة استرجاع كلمة المرور.');
+          console.warn('[ResetPwd] مفيش session — اللينك انتهت صلاحيته أو PKCE لم يكتمل');
+          document.getElementById('loginScreen')?.classList.add('active');
+          setTimeout(()=>{
+            const err = document.getElementById('li-err');
+            if(err){ err.textContent='⚠️ اللينك انتهت صلاحيته. اطلب لينك جديد.'; err.style.display='block'; }
+          }, 100);
         }
       } catch(e){
-        console.error('[ResetPwd] Session check error:', e);
+        console.error('[ResetPwd] error:', e);
+        document.getElementById('loginScreen')?.classList.add('active');
       }
     })();
     return true;
@@ -18424,6 +18447,7 @@ window.sbSaveClient = sbSaveClient;
 if(_sb && _sb.auth && _sb.auth.onAuthStateChange){
   _sb.auth.onAuthStateChange((event, session) => {
     console.log('[Auth Event]', event);
+    console.log('[Auth Event]', event, session?.user?.email);
     if(event === 'PASSWORD_RECOVERY' && session){
       document.getElementById('loginScreen').classList.remove('active');
       document.getElementById('appScreen').classList.remove('active');
