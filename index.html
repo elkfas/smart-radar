@@ -18034,18 +18034,18 @@ function doLogoutSupabase(){
 
 // عرض شاشة استرجاع الباسورد
 function showForgotPassword(){
-  window._forgotScreenActive = true; // flag يمنع initSupabase من إعادة loginScreen
-  // إخفاء كل الشاشات
-  ['loginScreen','appScreen','resetPwdScreen'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el){ el.classList.remove('active'); el.style.display='none'; }
+  window._forgotScreenActive = true;
+  // إخفاء كل الشاشات بـ inline style (أقوى من CSS class)
+  document.querySelectorAll('.screen').forEach(el=>{
+    el.classList.remove('active');
+    el.style.display = 'none';
   });
-  // إظهار شاشة الاسترجاع
+  // إظهار forgotScreen فقط
   const fp = document.getElementById('forgotScreen');
   if(!fp){ return; }
-  fp.style.display = 'flex';
+  fp.style.cssText = 'display:flex !important; min-height:100vh; align-items:center; justify-content:center; background:var(--bg);';
   fp.classList.add('active');
-  setTimeout(()=>document.getElementById('fp-email')?.focus(), 100);
+  setTimeout(()=>document.getElementById('fp-email')?.focus(), 200);
 }
 
 function hideForgotPassword(){
