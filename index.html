@@ -6802,32 +6802,17 @@ async function saveEditAgent(uid){
   if(window._sb && CC && CU && CU.role!=='super' && (u._sbId||u.id)){
     const sbId=u._sbId||u.id;
     const updatePayload = {
-      full_name: u.name,
-      region:    u.region,
-      target:    u.target,
-      line_code: u.lineCode || '',
-      perms:     u.perms || [],
+      full_name:   u.name,
+      region:      u.region,
+      target:      u.target,
+      line_code:   u.lineCode || '',
+      permissions: u.perms || [],
     };
-    // email يُحدَّث فقط لو تغيّر (username = email في هذا النظام)
     if(nu && nu !== u.username) updatePayload.email = nu;
-    console.log("UPDATE PAYLOAD:", updatePayload);
-    try {
-      const { data, error } = await window._sb
-        .from("profiles")
-        .update(updatePayload)
-        .eq("id", sbId)
-        .select();
-      console.log("UPDATE DATA:", data);
-      console.log("UPDATE ERROR:", error);
-      if (error) {
-        console.log("ERROR MESSAGE:", error.message);
-        console.log("ERROR DETAILS:", error.details);
-        console.log("ERROR HINT:", error.hint);
-        console.log("ERROR CODE:", error.code);
-      }
-    } catch(e) {
-      console.error("UPDATE EXCEPTION:", e);
-    }
+    await window._sbCall(
+      window._sb.from('profiles').update(updatePayload).eq('id', sbId),
+      8000
+    ).catch(e => console.warn('[sb edit agent]', e));
   }
   closeMod();rebuildPage('agents');showToast(isRTL()?'✓ تم حفظ بيانات الحساب':'✓ Account saved');
 }
@@ -19253,7 +19238,7 @@ window.SR = (function() {
       avatar: (pr.full_name || 'U')[0].toUpperCase(),
       avC: 'avB',
       lineCode: pr.line_code || '',
-      perms: pr.perms || [],
+      perms: pr.permissions || [],  // profiles.permissions → DB.users.perms
     }));
     // دمج: super users + company profiles (بدون تكرار)
     DB.users = [
